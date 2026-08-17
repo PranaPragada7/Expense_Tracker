@@ -10,8 +10,6 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      EXPENSE_DB: ${{ runner.temp }}/expense-tracker-ci.db
 
     steps:
       - name: Check out repository
@@ -41,6 +39,8 @@ jobs:
         run: python -m pytest -q
 
       - name: Run MCP smoke test
+        env:
+          EXPENSE_DB: ${{ runner.temp }}/expense-tracker-ci.db
         run: |
           python db_setup.py --reset
           python client_test.py
