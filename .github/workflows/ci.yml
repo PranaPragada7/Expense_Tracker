@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Check formatting
+        run: python -m black --check .
+
+      - name: Compile source files
+        run: >-
+          python -m compileall -q agent.py client_test.py db_setup.py
+          mcp_client.py server.py streamlit_app.py
+
+      - name: Run automated tests
+        run: python -m pytest -q
+
+      - name: Run MCP smoke test
+        env:
+          EXPENSE_DB: ${{ runner.temp }}/expense-tracker-ci.db
+        run: |
+          python db_setup.py --reset
+          python client_test.py
