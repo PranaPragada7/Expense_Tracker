@@ -1,2 +1,3 @@
 -r requirements.txt
 black>=26.5,<27
+pytest>=8,<10
