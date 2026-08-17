@@ -1,0 +1,25 @@
+# Local configuration and credentials
+.env
+.streamlit/secrets.toml
+
+# Virtual environments and Python caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local databases and runtime files
+expenses.db
+*.db-wal
+*.db-shm
+*.log
+
+# Local editor and assistant metadata
+.claude/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

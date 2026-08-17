@@ -1,0 +1,5 @@
+mcp>=1.6,<3
+anthropic>=0.69,<1
+streamlit>=1.36,<2
+pandas>=2,<4
+python-dotenv>=1,<2
