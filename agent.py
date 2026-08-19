@@ -7,7 +7,7 @@ import os
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import anthropic
 from dotenv import load_dotenv
@@ -91,8 +91,8 @@ class ExpenseAgent:
     def __init__(
         self,
         model: str = MODEL,
-        api_key: Optional[str] = None,
-        server_script: Optional[Path] = None,
+        api_key: str | None = None,
+        server_script: Path | None = None,
         verbose: bool = True,
     ):
         key = api_key or os.environ.get("ANTHROPIC_API_KEY")

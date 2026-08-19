@@ -54,7 +54,9 @@ st.markdown(
 
         .stApp {
             background:
-                radial-gradient(circle at 85% 5%, rgba(99, 91, 255, 0.10), transparent 25rem),
+                radial-gradient(
+                    circle at 85% 5%, rgba(99, 91, 255, 0.10), transparent 25rem
+                ),
                 var(--canvas);
         }
 
@@ -436,7 +438,7 @@ with add_tab:
         st.warning("Add at least one category before recording an expense.")
     else:
         category_names = categories["name"].tolist()
-        category_ids = dict(zip(categories["name"], categories["id"]))
+        category_ids = dict(zip(categories["name"], categories["id"], strict=True))
 
         with st.form("quick_add_expense", clear_on_submit=True):
             category_col, amount_col = st.columns(2)
@@ -504,7 +506,8 @@ with chat_tab:
 
     if not st.session_state.messages:
         st.info(
-            "Ask about expenses, personal finance, banking, credit cards, or the database."
+            "Ask about expenses, personal finance, banking, credit cards, "
+            "or the database."
         )
 
     for message in st.session_state.messages:

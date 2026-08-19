@@ -23,7 +23,6 @@ Helper tools (4, added) : current_date, find_category, get_expense,
 import os
 import sqlite3
 from datetime import date, datetime, timedelta
-from typing import Any, Optional
 
 try:  # mcp SDK 1.x
     from mcp.server.fastmcp import FastMCP as MCPServer
@@ -59,7 +58,7 @@ def _rows(sql: str, params: tuple = ()) -> list[dict]:
         con.close()
 
 
-def _one(sql: str, params: tuple = ()) -> Optional[dict]:
+def _one(sql: str, params: tuple = ()) -> dict | None:
     con = _conn()
     try:
         row = con.execute(sql, params).fetchone()
@@ -106,7 +105,7 @@ _DATE_FORMATS = [
 ]
 
 
-def _parse_date(value: Optional[str]) -> str:
+def _parse_date(value: str | None) -> str:
     """Accepts 'today', 'yesterday', '2026-07-15', '15-07-2026', '15-Jul', ...
 
     Returns an ISO date string (YYYY-MM-DD). Defaults to today.
@@ -131,9 +130,10 @@ def _parse_date(value: Optional[str]) -> str:
     raw = str(value).strip()
     for fmt in _DATE_FORMATS:
         try:
-            parsed = datetime.strptime(raw, fmt).date()
-            if "%Y" not in fmt:  # no year given -> assume current year
-                parsed = parsed.replace(year=today.year)
+            if "%Y" in fmt:
+                parsed = datetime.strptime(raw, fmt).date()
+            else:  # Supply the year explicitly to avoid ambiguous platform defaults.
+                parsed = datetime.strptime(f"{raw} {today.year}", f"{fmt} %Y").date()
             return parsed.isoformat()
         except ValueError:
             continue
@@ -163,7 +163,7 @@ _MONTH_NAMES = {
 _MONTH_NAMES.update({k[:3]: v for k, v in list(_MONTH_NAMES.items())})
 
 
-def _parse_month(value: Optional[str]) -> tuple[int, int]:
+def _parse_month(value: str | None) -> tuple[int, int]:
     """Accepts '2026-07', 'July', 'July 2026', '07', 'last month', None."""
     today = date.today()
     if value is None or str(value).strip() == "":
@@ -191,7 +191,7 @@ def _parse_month(value: Optional[str]) -> tuple[int, int]:
     return year, month
 
 
-def _resolve_category(name: str) -> Optional[dict]:
+def _resolve_category(name: str) -> dict | None:
     """Case-insensitive exact match first, then a LIKE match."""
     if not name:
         return None
@@ -323,10 +323,10 @@ def add_expense(
 @mcp.tool()
 def update_expense(
     expense_id: int,
-    amount: Optional[float] = None,
-    expense_date: Optional[str] = None,
-    description: Optional[str] = None,
-    category_id: Optional[int] = None,
+    amount: float | None = None,
+    expense_date: str | None = None,
+    description: str | None = None,
+    category_id: int | None = None,
 ) -> dict:
     """Update an existing expense. Only the fields you pass are changed.
 
@@ -448,7 +448,7 @@ def total_expense() -> dict:
 
 
 @mcp.tool()
-def monthly_summary(month: Optional[str] = None) -> dict:
+def monthly_summary(month: str | None = None) -> dict:
     """Spending summary for a month, broken down by category.
 
     month: 'YYYY-MM', a month name, 'last month', or omit it for this month.
