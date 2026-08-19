@@ -130,9 +130,10 @@ def _parse_date(value: str | None) -> str:
     raw = str(value).strip()
     for fmt in _DATE_FORMATS:
         try:
-            parsed = datetime.strptime(raw, fmt).date()
-            if "%Y" not in fmt:  # no year given -> assume current year
-                parsed = parsed.replace(year=today.year)
+            if "%Y" in fmt:
+                parsed = datetime.strptime(raw, fmt).date()
+            else:  # Supply the year explicitly to avoid ambiguous platform defaults.
+                parsed = datetime.strptime(f"{raw} {today.year}", f"{fmt} %Y").date()
             return parsed.isoformat()
         except ValueError:
             continue

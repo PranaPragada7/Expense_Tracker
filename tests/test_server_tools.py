@@ -112,7 +112,7 @@ def test_date_parsing(value, expected):
     assert server._parse_date(value) == expected
 
 
-def test_date_month_helpers_and_database_creation(tmp_path, monkeypatch):
+def test_date_month_helpers_and_database_creation(tmp_path, monkeypatch, database):
     with pytest.raises(ValueError, match="Unsupported date"):
         server._parse_date("not-a-date")
 
