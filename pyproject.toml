@@ -2,5 +2,19 @@
 line-length = 88
 target-version = ["py311"]
 
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "UP"]
+
 [tool.pytest.ini_options]
+addopts = "--cov=agent --cov=db_setup --cov=mcp_client --cov=server --cov=streamlit_app --cov-report=term-missing --cov-fail-under=80"
 testpaths = ["tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "if __name__ == .__main__.:",
+]
+skip_covered = true

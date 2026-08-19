@@ -13,7 +13,7 @@ import os
 import sys
 from contextlib import AsyncExitStack
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import get_default_environment, stdio_client
@@ -61,7 +61,7 @@ class ExpenseMCPClient:
     def __init__(self, server_script: Path = SERVER):
         self.server_script = Path(server_script)
         self._stack = AsyncExitStack()
-        self.session: Optional[ClientSession] = None
+        self.session: ClientSession | None = None
 
     async def __aenter__(self) -> "ExpenseMCPClient":
         server_env = get_default_environment()
