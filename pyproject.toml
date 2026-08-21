@@ -10,7 +10,7 @@ target-version = "py311"
 select = ["B", "E", "F", "I", "UP"]
 
 [tool.pytest.ini_options]
-addopts = "--cov=agent --cov=db_setup --cov=mcp_client --cov=server --cov=streamlit_app --cov-report=term-missing --cov-fail-under=80"
+addopts = "--cov=agent --cov=db_setup --cov=mcp_client --cov=server --cov=streamlit_app --cov=expense_tracker --cov-report=term-missing --cov-fail-under=80"
 testpaths = ["tests"]
 
 [tool.coverage.report]

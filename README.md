@@ -1,129 +1,145 @@
-# Expense Tracker Agent
+# Expense Tracker Platform
 
 [![CI](https://github.com/PranaPragada7/Expense_Tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/PranaPragada7/Expense_Tracker/actions/workflows/ci.yml)
 ![Coverage](https://img.shields.io/badge/coverage-80%25%2B-brightgreen)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
-![Streamlit](https://img.shields.io/badge/Streamlit-1.x-FF4B4B?logo=streamlit&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-3-003B57?logo=sqlite&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.x-009688?logo=fastapi&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-local-2496ED?logo=docker&logoColor=white)
 ![MCP](https://img.shields.io/badge/Protocol-MCP-635BFF)
 
-An AI-powered personal expense tracker that turns natural-language requests
-into structured database operations. The project combines a responsive
-Streamlit interface, Claude tool use, an MCP server, and local SQLite storage.
+An authenticated expense-management API and local AI assistant. The production
+backend provides user-isolated financial data, PostgreSQL migrations, analytics,
+idempotent writes, and structured operational signals. The original Streamlit
+and MCP workflow remains available as a private, single-user AI demonstration.
 
 ![Expense Tracker interface](docs/expense-tracker-ui.png)
 
-## What this project demonstrates
+## Engineering signals
 
-- Agentic, multi-step tool use for real database workflows
-- A clean separation between the language model, MCP transport, and data layer
-- A direct Claude tool-calling loop without an orchestration framework
-- Input validation, scoped assistant behavior, and safe local data handling
-- Automated smoke tests and continuous integration
-- A responsive user interface for entry, conversation, and spending insights
-
-## Product features
-
-- Add expenses through a form or a natural-language request
-- Store the date, amount, category, and description for each transaction
-- Search, update, delete, and summarize expenses through MCP tools
-- Review totals, recent transactions, and category-level spending
-- Ask the focused financial assistant for database-backed insights
-- Keep expense data local in a SQLite file
+- FastAPI endpoints with explicit Pydantic request and response contracts
+- Argon2 password hashing and expiring JWT bearer authentication
+- Authorization enforced through user-scoped repository queries
+- PostgreSQL and SQLite support through SQLAlchemy 2
+- Auditable Alembic migrations and automated migration-drift detection
+- Decimal-backed currency values instead of floating-point persistence
+- Pagination, date/category/search filters, and monthly aggregation
+- Idempotency keys that prevent duplicate expense creation during retries
+- Structured request logs, correlation IDs, liveness, and database readiness
+- Non-root containers and a locally bound Docker Compose environment
+- Offline API tests plus migration-backed PostgreSQL integration tests in CI
+- Direct Claude tool use through an 18-tool MCP server for the local assistant
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    U[User] --> UI[Streamlit or CLI]
-    UI --> A[Claude agent]
-    A -->|Tool request| C[MCP client]
-    C -->|stdio| S[MCP server]
-    S -->|DB-API 2.0| D[(SQLite)]
-    D --> S
-    S -->|Structured result| A
-    A --> UI
+    Client[API client] --> API[FastAPI]
+    API --> Auth[JWT authentication]
+    API --> Service[Business services]
+    Service --> Repo[User-scoped repositories]
+    Repo --> ORM[SQLAlchemy]
+    ORM --> PG[(PostgreSQL)]
+
+    LocalUser[Local user] --> UI[Streamlit]
+    UI --> Agent[Claude agent]
+    Agent --> MCP[MCP server]
+    MCP --> SQLite[(Private SQLite)]
 ```
 
-Claude never accesses SQLite directly. It selects from the MCP tool schemas,
-and the server owns every validated database read and write.
+The API path is the production-style, multi-user boundary. Authentication is
+resolved before business logic, and every category and expense query is scoped
+to the authenticated user. The local AI path is deliberately private and can be
+run without exposing personal financial records as a public service.
 
-### Example agent workflows
+## API capabilities
 
-| User intent | Tool sequence |
-|---|---|
-| Add a lunch expense | `find_category` → `add_expense` |
-| Change yesterday's gas amount | `search_expenses` → `update_expense` |
-| Delete a matching purchase | `search_expenses` → `delete_expense` |
-| Review monthly spending | `monthly_summary` |
+| Area | Endpoint | Behavior |
+|---|---|---|
+| Health | `GET /health/live` | Process liveness |
+| Health | `GET /health/ready` | Database readiness |
+| Accounts | `POST /api/v1/auth/register` | Create an Argon2-protected account |
+| Accounts | `POST /api/v1/auth/token` | Issue a short-lived bearer token |
+| Accounts | `GET /api/v1/me` | Read the current identity |
+| Categories | `GET/POST /api/v1/categories` | Manage user-owned categories |
+| Expenses | `GET/POST /api/v1/expenses` | Paginated, filtered workflows |
+| Expenses | `GET/PATCH/DELETE /api/v1/expenses/{id}` | Isolated lifecycle operations |
+| Analytics | `GET /api/v1/analytics/monthly` | Category-level monthly totals |
 
-## Technology
+Send an `Idempotency-Key` header when creating an expense. Repeating the same
+request with that key returns the previously created record and identifies the
+response with `X-Idempotent-Replay: true`.
 
-| Layer | Technology |
-|---|---|
-| Interface | Streamlit, pandas |
-| Language model | Anthropic Claude |
-| Agent integration | Direct Messages API tool-use loop |
-| Tool protocol | Model Context Protocol over stdio |
-| Data | SQLite through Python DB-API 2.0 |
-| Quality | pytest, Black, GitHub Actions |
+## Run the API locally
 
-## Quick start
-
-Requirements:
-
-- Python 3.11 or newer
-- An Anthropic API key for the assistant
-
-Create and activate a virtual environment:
+Requirements: Python 3.11 or newer.
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
+Copy-Item .env.example .env
+python -m alembic upgrade head
+python -m uvicorn expense_tracker.api:app --reload
 ```
 
-For macOS or Linux, activate the environment with:
+On macOS or Linux, activate the environment with:
 
 ```bash
 source .venv/bin/activate
 ```
 
-Create a local environment file and add `ANTHROPIC_API_KEY`:
+The default API database is the ignored local file `expense_api.db`. Open
+[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) for the interactive
+OpenAPI documentation.
+
+For local PostgreSQL and the API container:
 
 ```powershell
-Copy-Item .env.example .env
+docker compose up --build
 ```
 
-Create the database schema and starter categories, then launch the app:
+The compose file binds the API only to `127.0.0.1:8000`; it does not deploy or
+publish anything to a cloud provider. Stop the stack with `docker compose down`.
+Add `--volumes` only when you intentionally want to delete the local PostgreSQL
+data volume.
+
+## Example API workflow
+
+Register an account:
+
+```powershell
+$account = @{
+  email = "developer@example.test"
+  password = "choose-a-long-local-password"
+  display_name = "Developer"
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:8000/api/v1/auth/register `
+  -ContentType application/json `
+  -Body $account
+```
+
+The generated OpenAPI interface provides authenticated examples for the
+remaining endpoints without requiring a separate REST client.
+
+## Run the local AI assistant
+
+The private assistant requires an Anthropic API key. Set `ANTHROPIC_API_KEY` in
+`.env`, initialize its separate local demonstration database, and launch the UI:
 
 ```powershell
 python db_setup.py
 streamlit run streamlit_app.py
 ```
 
-The MCP server uses stdio and starts automatically when a client connects.
+The MCP server uses stdio and starts automatically when the assistant connects.
+Manual entry and spending insights work locally; assistant requests require an
+available Anthropic account and quota.
 
-## Quality checks
-
-Install development dependencies and run the same checks used in CI:
-
-```powershell
-python -m pip install -r requirements-dev.txt
-python -m black --check .
-python -m ruff check .
-python -m compileall -q agent.py client_test.py db_setup.py mcp_client.py server.py streamlit_app.py
-python -m pytest -q
-python client_test.py
-```
-
-`client_test.py` exercises all 18 MCP tools and removes its temporary records
-when the smoke test finishes. Direct tests enforce at least 80% coverage across
-the agent, database, MCP client/server, and interface modules.
-
-## MCP tools
-
-The server exposes 18 tools:
+### MCP tool inventory
 
 - Category management: `list_categories`, `add_category`, `rename_category`,
   `delete_category`, `get_category_name`
@@ -133,47 +149,64 @@ The server exposes 18 tools:
 - Supporting queries: `current_date`, `find_category`, `get_expense`,
   `expenses_between`
 
+## Validation
+
+Run the same core checks used in CI:
+
+```powershell
+python -m black --check .
+python -m ruff check .
+python -m compileall -q agent.py client_test.py db_setup.py mcp_client.py server.py streamlit_app.py expense_tracker migrations
+python -m pytest -q
+python client_test.py
+python -m alembic check
+```
+
+CI tests Python 3.11, 3.12, and 3.13. A separate infrastructure job starts
+PostgreSQL, applies every migration, checks schema drift, exercises an
+authenticated expense round trip, validates Compose, and builds the API image.
+
 ## Project structure
 
 | Path | Purpose |
 |---|---|
-| `streamlit_app.py` | Form, assistant, and insights interface |
-| `agent.py` | Claude tool-calling loop and command-line interface |
-| `server.py` | Validated SQLite operations exposed as MCP tools |
-| `mcp_client.py` | Reusable stdio MCP client |
-| `db_setup.py` | Schema and starter-category initialization |
-| `client_test.py` | End-to-end MCP tool smoke test |
-| `tests/` | Automated database and UI checks |
-| `.github/workflows/ci.yml` | Continuous-integration pipeline |
+| `expense_tracker/api.py` | HTTP routes, dependencies, health, request context |
+| `expense_tracker/models.py` | User, category, and expense relational models |
+| `expense_tracker/repositories.py` | Authenticated user-scoped persistence |
+| `expense_tracker/services.py` | Transactions and business rules |
+| `expense_tracker/security.py` | Argon2 and JWT primitives |
+| `expense_tracker/schemas.py` | Validated API contracts |
+| `migrations/` | Versioned PostgreSQL and SQLite schema changes |
+| `compose.yaml` | Local API and PostgreSQL environment |
+| `streamlit_app.py` | Private single-user interface |
+| `agent.py` | Direct Claude tool-calling loop |
+| `server.py` | Local SQLite operations exposed as MCP tools |
+| `tests/` | API, authorization, MCP, database, and UI checks |
 
 ## Configuration
 
-| Variable | Required | Default |
-|---|---:|---|
-| `ANTHROPIC_API_KEY` | Yes | — |
-| `ANTHROPIC_MODEL` | No | `claude-sonnet-5` |
-| `AGENT_EFFORT` | No | `medium` |
-| `EXPENSE_DB` | No | `expenses.db` beside the source files |
+| Variable | Required | Default | Purpose |
+|---|---:|---|---|
+| `DATABASE_URL` | No | `sqlite:///./expense_api.db` | API persistence |
+| `JWT_SECRET` | Production | Local development value | Bearer-token signing |
+| `ACCESS_TOKEN_MINUTES` | No | `60` | Token lifetime |
+| `APP_ENV` | No | `development` | Runtime safety mode |
+| `LOG_LEVEL` | No | `INFO` | Structured log threshold |
+| `ANTHROPIC_API_KEY` | AI assistant | None | Claude authentication |
+| `ANTHROPIC_MODEL` | No | `claude-sonnet-5` | Assistant model |
+| `EXPENSE_DB` | No | `expenses.db` | Private MCP demo storage |
 
-The `.env` file and `expenses.db` are excluded from Git. API keys and personal
-expense data stay outside the repository.
+Production mode refuses to start with the built-in development JWT secret.
+Secrets, tokens, local databases, and personal expense records are excluded from
+Git.
 
-## Deployment notes
+## Security scope
 
-- SQLite is ideal for a local demonstration or a single-user deployment. A
-  shared multi-user service should use authenticated users and a server database.
-- The app launches the MCP server as a local child process, so the host must
-  support Python subprocesses and writable local storage.
-- Assistant features require a valid Anthropic key, available quota, and network
-  access. Manual entry and insights remain local database workflows.
-- The assistant provides general educational finance information, not financial
-  advice, account access, or bank integrations.
-
-To recreate the database with an empty expenses table:
-
-```powershell
-python db_setup.py --reset
-```
+The API demonstrates application security controls but has not undergone an
+independent security audit. It does not connect to banks, process payments, or
+provide financial advice. Use generated secrets, TLS, rate limiting at the edge,
+managed backups, and an external security review before handling real sensitive
+data in a shared environment.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for release history and
-[`CONTRIBUTING.md`](CONTRIBUTING.md) for contribution guidelines.
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for contribution guidance.
