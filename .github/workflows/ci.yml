@@ -99,7 +99,9 @@ jobs:
         run: python -m alembic check
 
       - name: Run PostgreSQL integration test
-        run: python -m pytest -q tests/test_postgres_integration.py
+        # Coverage is enforced by the complete matrix suite above. This focused
+        # job validates the same API against the migrated PostgreSQL service.
+        run: python -m pytest -q --no-cov tests/test_postgres_integration.py
 
       - name: Validate local infrastructure
         run: |
