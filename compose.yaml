@@ -1,0 +1,39 @@
+services:
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: expense_tracker
+      POSTGRES_USER: expense_tracker
+      POSTGRES_PASSWORD: local-expense-password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U expense_tracker -d expense_tracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - expense-postgres-data:/var/lib/postgresql/data
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://expense_tracker:local-expense-password@database:5432/expense_tracker
+      JWT_SECRET: local-docker-secret-change-before-production
+      APP_ENV: development
+      LOG_LEVEL: INFO
+    depends_on:
+      database:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+volumes:
+  expense-postgres-data:

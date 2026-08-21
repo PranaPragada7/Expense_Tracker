@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
@@ -25,6 +26,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: |
+            requirements-api.txt
             requirements.txt
             requirements-dev.txt
 
@@ -40,7 +42,7 @@ jobs:
       - name: Compile source files
         run: >-
           python -m compileall -q agent.py client_test.py db_setup.py
-          mcp_client.py server.py streamlit_app.py
+          mcp_client.py server.py streamlit_app.py expense_tracker migrations
 
       - name: Run automated tests
         run: python -m pytest -q
@@ -51,3 +53,58 @@ jobs:
         run: |
           python db_setup.py --reset
           python client_test.py
+
+  infrastructure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: expense_tracker
+          POSTGRES_USER: expense_tracker
+          POSTGRES_PASSWORD: ci-expense-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U expense_tracker -d expense_tracker"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql+psycopg://expense_tracker:ci-expense-password@127.0.0.1:5432/expense_tracker
+      TEST_DATABASE_URL: postgresql+psycopg://expense_tracker:ci-expense-password@127.0.0.1:5432/expense_tracker
+      JWT_SECRET: ci-only-secret-that-is-long-enough
+      APP_ENV: test
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            requirements-api.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Apply PostgreSQL migrations
+        run: python -m alembic upgrade head
+
+      - name: Check migration drift
+        run: python -m alembic check
+
+      - name: Run PostgreSQL integration test
+        # Coverage is enforced by the complete matrix suite above. This focused
+        # job validates the same API against the migrated PostgreSQL service.
+        run: python -m pytest -q --no-cov tests/test_postgres_integration.py
+
+      - name: Validate local infrastructure
+        run: |
+          docker compose config --quiet
+          docker build --tag expense-tracker-api:ci .

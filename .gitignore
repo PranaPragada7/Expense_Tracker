@@ -15,6 +15,7 @@ htmlcov/
 
 # Local databases and runtime files
 expenses.db
+expense_api.db
 *.db-wal
 *.db-shm
 *.log
