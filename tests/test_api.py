@@ -330,3 +330,149 @@ def test_security_configuration_and_logging_helpers():
         "test", 20, __file__, 1, "hello %s", ("world",), None
     )
     assert '"message": "hello world"' in formatter.format(record)
+
+
+@pytest.mark.parametrize(
+    "field", ["amount", "expense_date", "category_id", "description"]
+)
+def test_null_update_is_rejected_without_changing_expense(client, field):
+    headers = register_and_login(client)
+    category = client.get("/api/v1/categories", headers=headers).json()[0]["id"]
+    created = client.post(
+        "/api/v1/expenses",
+        headers=headers,
+        json={"amount": "12.34", "category_id": category, "description": "Lunch"},
+    ).json()
+    path = f"/api/v1/expenses/{created['id']}"
+    before = client.get(path, headers=headers).json()
+    assert client.patch(path, headers=headers, json={field: None}).status_code == 422
+    assert client.get(path, headers=headers).json() == before
+
+
+def test_blank_names_and_descriptions_are_rejected(client):
+    assert (
+        client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": "blank@example.test",
+                "password": PASSWORD,
+                "display_name": "  ",
+            },
+        ).status_code
+        == 422
+    )
+    headers = register_and_login(client)
+    assert (
+        client.post(
+            "/api/v1/categories", headers=headers, json={"name": " \t "}
+        ).status_code
+        == 422
+    )
+    category = client.get("/api/v1/categories", headers=headers).json()[0]["id"]
+    payload = {"amount": "1.00", "category_id": category, "description": " \n "}
+    assert (
+        client.post("/api/v1/expenses", headers=headers, json=payload).status_code
+        == 422
+    )
+    created = client.post(
+        "/api/v1/expenses", headers=headers, json={**payload, "description": "Lunch"}
+    ).json()
+    assert (
+        client.patch(
+            f"/api/v1/expenses/{created['id']}",
+            headers=headers,
+            json={"description": " "},
+        ).status_code
+        == 422
+    )
+
+
+def test_idempotency_conflicts_and_original_request_survive_edits(client, monkeypatch):
+    from expense_tracker.repositories import ExpenseRepository
+
+    headers = register_and_login(client)
+    category = client.get("/api/v1/categories", headers=headers).json()[0]["id"]
+    payload = {
+        "expense_date": "2026-08-15",
+        "amount": "12.30",
+        "category_id": category,
+        "description": "Lunch",
+    }
+    keyed = {**headers, "Idempotency-Key": "retry-key"}
+    created = client.post("/api/v1/expenses", headers=keyed, json=payload).json()
+    assert (
+        client.post(
+            "/api/v1/expenses", headers=keyed, json={**payload, "amount": "99.00"}
+        ).status_code
+        == 409
+    )
+
+    # Simulate a concurrent request that missed the committed row on its first
+    # lookup. The real INSERT/flush must hit the unique constraint and recover.
+    original = ExpenseRepository.expense_by_idempotency_key
+    calls = 0
+
+    def stale_once(repo, key):
+        nonlocal calls
+        calls += 1
+        return None if calls == 1 else original(repo, key)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(ExpenseRepository, "expense_by_idempotency_key", stale_once)
+        replay = client.post("/api/v1/expenses", headers=keyed, json=payload)
+    assert replay.status_code == 200
+    assert replay.headers["X-Idempotent-Replay"] == "true"
+    assert replay.json()["id"] == created["id"]
+    assert client.get("/api/v1/expenses", headers=headers).json()["total"] == 1
+
+    client.patch(
+        f"/api/v1/expenses/{created['id']}", headers=headers, json={"amount": "20.00"}
+    )
+    replay = client.post(
+        "/api/v1/expenses", headers=keyed, json={**payload, "amount": "12.3"}
+    )
+    assert replay.status_code == 200
+    assert replay.json()["amount"] == "20.00"
+    assert (
+        client.post(
+            "/api/v1/expenses", headers=keyed, json={**payload, "amount": "20.00"}
+        ).status_code
+        == 409
+    )
+    for key in ("", "   "):
+        assert (
+            client.post(
+                "/api/v1/expenses",
+                headers={**headers, "Idempotency-Key": key},
+                json=payload,
+            ).status_code
+            == 400
+        )
+
+
+def test_duplicate_registration_and_category_flush_return_conflict(client, monkeypatch):
+    from expense_tracker.repositories import ExpenseRepository, UserRepository
+
+    headers = register_and_login(client)
+    with monkeypatch.context() as scoped:
+        scoped.setattr(UserRepository, "by_email", lambda *args: None)
+        assert (
+            client.post(
+                "/api/v1/auth/register",
+                json={
+                    "email": "owner@example.com",
+                    "password": PASSWORD,
+                    "display_name": "Race",
+                },
+            ).status_code
+            == 409
+        )
+    with monkeypatch.context() as scoped:
+        scoped.setattr(ExpenseRepository, "category_by_name", lambda *args: None)
+        assert (
+            client.post(
+                "/api/v1/categories", headers=headers, json={"name": "Food"}
+            ).status_code
+            == 409
+        )
+    assert client.get("/api/v1/me", headers=headers).status_code == 200

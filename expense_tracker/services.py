@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from db_setup import CATEGORIES
 
+from .idempotency import expense_fingerprint
 from .models import Category, Expense, User
 from .repositories import ExpenseRepository, UserRepository
 from .schemas import ExpenseCreate, ExpenseUpdate
@@ -25,17 +26,17 @@ class AccountService:
     def register(self, email: str, password: str, display_name: str) -> User:
         if self.users.by_email(email):
             raise HTTPException(status.HTTP_409_CONFLICT, "Email is already registered")
-        user = self.users.add(
-            User(
-                email=email,
-                display_name=display_name,
-                password_hash=hash_password(password),
-            )
-        )
-        self.session.add_all(
-            [Category(user_id=user.id, name=name) for name in CATEGORIES]
-        )
         try:
+            user = self.users.add(
+                User(
+                    email=email,
+                    display_name=display_name,
+                    password_hash=hash_password(password),
+                )
+            )
+            self.session.add_all(
+                [Category(user_id=user.id, name=name) for name in CATEGORIES]
+            )
             self.session.commit()
         except IntegrityError as exc:
             self.session.rollback()
@@ -64,8 +65,8 @@ class ExpenseService:
     def add_category(self, name: str) -> Category:
         if self.repo.category_by_name(name):
             raise HTTPException(status.HTTP_409_CONFLICT, "Category already exists")
-        category = self.repo.add_category(name)
         try:
+            category = self.repo.add_category(name)
             self.session.commit()
         except IntegrityError as exc:
             self.session.rollback()
@@ -77,34 +78,50 @@ class ExpenseService:
     def create_expense(
         self, payload: ExpenseCreate, idempotency_key: str | None
     ) -> tuple[Expense, bool]:
-        if idempotency_key:
-            if len(idempotency_key) > 128:
+        fingerprint = expense_fingerprint(
+            payload.expense_date,
+            payload.amount,
+            payload.category_id,
+            payload.description,
+        )
+        if idempotency_key is not None:
+            if not idempotency_key.strip() or len(idempotency_key) > 128:
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
-                    "Idempotency-Key cannot exceed 128 characters",
+                    "Idempotency-Key must be nonblank and at most 128 characters",
                 )
             existing = self.repo.expense_by_idempotency_key(idempotency_key)
             if existing:
-                return existing, True
+                return self._replay(existing, fingerprint)
         if not self.repo.category(payload.category_id):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Category not found")
-        expense = self.repo.add_expense(
-            expense_date=payload.expense_date,
-            amount=payload.amount,
-            category_id=payload.category_id,
-            description=payload.description,
-            idempotency_key=idempotency_key,
-        )
         try:
+            expense = self.repo.add_expense(
+                expense_date=payload.expense_date,
+                amount=payload.amount,
+                category_id=payload.category_id,
+                description=payload.description,
+                idempotency_key=idempotency_key,
+                idempotency_fingerprint=fingerprint if idempotency_key else None,
+            )
             self.session.commit()
         except IntegrityError:
             self.session.rollback()
             if idempotency_key:
                 existing = self.repo.expense_by_idempotency_key(idempotency_key)
                 if existing:
-                    return existing, True
+                    return self._replay(existing, fingerprint)
             raise
         return expense, False
+
+    @staticmethod
+    def _replay(expense: Expense, fingerprint: str) -> tuple[Expense, bool]:
+        if expense.idempotency_fingerprint != fingerprint:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Idempotency-Key was already used with a different request",
+            )
+        return expense, True
 
     def update_expense(self, expense_id: int, payload: ExpenseUpdate) -> Expense:
         expense = self.require_expense(expense_id)
