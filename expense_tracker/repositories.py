@@ -87,6 +87,7 @@ class ExpenseRepository:
         category_id: int,
         description: str,
         idempotency_key: str | None,
+        idempotency_fingerprint: str | None = None,
     ) -> Expense:
         expense = Expense(
             user_id=self.user_id,
@@ -95,6 +96,7 @@ class ExpenseRepository:
             category_id=category_id,
             description=description,
             idempotency_key=idempotency_key,
+            idempotency_fingerprint=idempotency_fingerprint,
         )
         self.session.add(expense)
         self.session.flush()

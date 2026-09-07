@@ -70,6 +70,20 @@ Send an `Idempotency-Key` header when creating an expense. Repeating the same
 request with that key returns the previously created record and identifies the
 response with `X-Idempotent-Replay: true`.
 
+Keys are scoped to the authenticated user. Reusing a key with different creation
+fields returns `409 Conflict`; concurrent matching retries recover from the database
+unique constraint. Amounts such as `12.3` and `12.30` are equivalent. A replay returns
+the current expense record, even if it has subsequently been edited. Keys live for
+the lifetime of the expense; deleting the expense also releases its key. Clients
+should send an explicit `expense_date` when retrying across dates.
+
+Migration `0002` stores immutable creation fingerprints. For existing keyed rows,
+it snapshots their values at migration time because older versions did not retain
+the original request. An old request that differs from that snapshot returns `409`.
+
+PATCH requests omit unchanged fields. Explicit null values and whitespace-only
+names or descriptions return `422` without changing stored data.
+
 ## Run the API locally
 
 Requirements: Python 3.11 or newer.

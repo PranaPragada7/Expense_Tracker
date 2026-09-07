@@ -11,6 +11,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
+def nonblank(value: str) -> str:
+    cleaned = value.strip()
+    if not cleaned:
+        raise ValueError("Must not be blank")
+    return cleaned
+
+
 class ApiModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -31,7 +38,7 @@ class RegisterRequest(ApiModel):
     @field_validator("display_name")
     @classmethod
     def clean_display_name(cls, value: str) -> str:
-        return value.strip()
+        return nonblank(value)
 
 
 class LoginRequest(ApiModel):
@@ -63,7 +70,7 @@ class CategoryCreate(ApiModel):
     @field_validator("name")
     @classmethod
     def clean_name(cls, value: str) -> str:
-        return value.strip()
+        return nonblank(value)
 
 
 class CategoryResponse(ApiModel):
@@ -80,7 +87,7 @@ class ExpenseCreate(ApiModel):
     @field_validator("description")
     @classmethod
     def clean_description(cls, value: str) -> str:
-        return value.strip()
+        return nonblank(value)
 
 
 class ExpenseUpdate(ApiModel):
@@ -92,12 +99,14 @@ class ExpenseUpdate(ApiModel):
     @field_validator("description")
     @classmethod
     def clean_description(cls, value: str | None) -> str | None:
-        return value.strip() if value is not None else None
+        return nonblank(value) if value is not None else None
 
     @model_validator(mode="after")
     def contains_change(self) -> ExpenseUpdate:
         if not self.model_fields_set:
             raise ValueError("At least one field is required")
+        if any(getattr(self, field) is None for field in self.model_fields_set):
+            raise ValueError("Expense fields cannot be null; omit unchanged fields")
         return self
 
 
