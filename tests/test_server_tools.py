@@ -41,7 +41,19 @@ def test_category_lifecycle_and_validation(database):
     assert "error" in server.get_category_name(created["id"])
 
 
-def test_expense_lifecycle_and_summaries(database):
+@pytest.mark.parametrize(
+    ("today", "month_count", "month_total"),
+    [(date(2026, 9, 15), 2, 52.35), (date(2026, 9, 1), 1, 12.35)],
+)
+def test_expense_lifecycle_and_summaries(
+    database, monkeypatch, today, month_count, month_total
+):
+    class FixedDate(date):
+        @classmethod
+        def today(cls):
+            return today
+
+    monkeypatch.setattr(server, "date", FixedDate)
     food = category_id("food")
     fuel = category_id("fuel")
 
@@ -52,8 +64,8 @@ def test_expense_lifecycle_and_summaries(database):
     lunch = server.add_expense("today", " Lunch ", 12.345, food)
     petrol = server.add_expense("yesterday", "Petrol", 40, fuel)
     assert lunch["amount"] == 12.35
-    assert lunch["expense_date"] == date.today().isoformat()
-    assert petrol["expense_date"] == (date.today() - timedelta(days=1)).isoformat()
+    assert lunch["expense_date"] == today.isoformat()
+    assert petrol["expense_date"] == (today - timedelta(days=1)).isoformat()
 
     assert len(server.list_expenses(limit=1)) == 1
     assert server.search_expenses("lunch")[0]["id"] == lunch["id"]
@@ -68,8 +80,8 @@ def test_expense_lifecycle_and_summaries(database):
     assert "error" in server.total_expense_by_category("unknown")
 
     summary = server.monthly_summary("this month")
-    assert summary["count"] == 2
-    assert summary["total"] == 52.35
+    assert summary["count"] == month_count
+    assert summary["total"] == month_total
 
     between = server.expenses_between("today", "yesterday")
     assert between["count"] == 2
