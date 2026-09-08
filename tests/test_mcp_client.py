@@ -63,3 +63,33 @@ def test_client_delegates_to_session():
         ("add_expense", {"amount": 12}),
         ("find_category", {"name": "food"}),
     ]
+
+
+def test_tool_failures_reach_agent_as_errors():
+    from agent import ExpenseAgent
+
+    async def run():
+        for spelling in ("isError", "is_error"):
+
+            class Session:
+                async def call_tool(self, name, arguments, flag=spelling):
+                    return SimpleNamespace(
+                        **{flag: True},
+                        content=[SimpleNamespace(text="Unknown tool")],
+                    )
+
+            client = ExpenseMCPClient()
+            client.session = Session()
+            agent = ExpenseAgent.__new__(ExpenseAgent)
+            agent.mcp = client
+            result, is_error = await agent._run_tool("missing", {})
+            assert is_error is True
+            assert "Unknown tool" in result["error"]
+            try:
+                await client.call("missing")
+            except RuntimeError as exc:
+                assert str(exc) == "Unknown tool"
+            else:
+                raise AssertionError("tool failure was swallowed")
+
+    asyncio.run(run())

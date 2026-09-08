@@ -55,3 +55,20 @@ def test_streamlit_app_loads_with_an_empty_database(tmp_path, monkeypatch):
             0
         ]
     assert expense_count == 0
+
+
+def test_amount_form_rejects_nonfinite_values(tmp_path, monkeypatch):
+    monkeypatch.setenv("EXPENSE_DB", str(tmp_path / "invalid-amount.db"))
+    app = AppTest.from_file(
+        str(PROJECT_ROOT / "streamlit_app.py"), default_timeout=20
+    ).run()
+    for value in ("NaN", "sNaN", "Infinity", "-Infinity", "1e1000"):
+        app.text_input[0].set_value(value)
+        app.text_input[1].set_value("Lunch")
+        next(
+            button for button in app.button if button.label == "Add Expense"
+        ).click().run()
+        assert not app.exception
+        assert any("amount greater than" in error.value for error in app.error)
+    with sqlite3.connect(tmp_path / "invalid-amount.db") as connection:
+        assert connection.execute("SELECT COUNT(*) FROM expenses").fetchone()[0] == 0

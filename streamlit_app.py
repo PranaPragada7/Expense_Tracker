@@ -9,6 +9,7 @@ analytics dashboard. All displayed amounts use US dollars.
 """
 
 import asyncio
+import math
 import os
 import sqlite3
 from datetime import date
@@ -471,7 +472,11 @@ with add_tab:
             except InvalidOperation:
                 amount = Decimal("0")
 
-            if amount <= 0:
+            if (
+                not amount.is_finite()
+                or amount <= 0
+                or not math.isfinite(float(amount))
+            ):
                 st.error("Enter an amount greater than $0.00.")
             elif not description:
                 st.error("Enter what the expense was for.")
