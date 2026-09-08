@@ -93,8 +93,11 @@ class ExpenseMCPClient:
         `tool_name` is positional-only so that tools with a `name` argument
         (e.g. find_category) still work.
         """
-        return unwrap(await self.session.call_tool(tool_name, kwargs))
+        return await self.call_with_args(tool_name, kwargs)
 
     async def call_with_args(self, tool_name: str, arguments: dict) -> Any:
         """Same as call(), but takes the argument dict as produced by the LLM."""
-        return unwrap(await self.session.call_tool(tool_name, arguments or {}))
+        result = await self.session.call_tool(tool_name, arguments or {})
+        if getattr(result, "is_error", False) or getattr(result, "isError", False):
+            raise RuntimeError(str(unwrap(result)))
+        return unwrap(result)
