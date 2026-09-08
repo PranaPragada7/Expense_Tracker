@@ -151,14 +151,14 @@ class ExpenseService:
             year_text, month_text = month.split("-", 1)
             year, month_number = int(year_text), int(month_text)
             start = date(year, month_number, 1)
+            if start.month == 12:
+                end = date(start.year + 1, 1, 1)
+            else:
+                end = date(start.year, start.month + 1, 1)
         except (TypeError, ValueError) as exc:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, "Month must use YYYY-MM format"
             ) from exc
-        if start.month == 12:
-            end = date(start.year + 1, 1, 1)
-        else:
-            end = date(start.year, start.month + 1, 1)
         rows = self.repo.monthly_summary(start, end)
         by_category = [
             {"category": name, "count": count, "total": total}
