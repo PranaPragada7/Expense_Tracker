@@ -484,6 +484,9 @@ def test_monthly_summary_rejects_unrepresentable_end_date(client):
         "/api/v1/analytics/monthly", headers=headers, params={"month": "9999-12"}
     )
     assert response.status_code == 400
-    assert client.get(
-        "/api/v1/analytics/monthly", headers=headers, params={"month": "9999-11"}
-    ).status_code == 200
+    assert (
+        client.get(
+            "/api/v1/analytics/monthly", headers=headers, params={"month": "9999-11"}
+        ).status_code
+        == 200
+    )
