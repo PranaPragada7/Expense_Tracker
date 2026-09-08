@@ -476,3 +476,17 @@ def test_duplicate_registration_and_category_flush_return_conflict(client, monke
             == 409
         )
     assert client.get("/api/v1/me", headers=headers).status_code == 200
+
+
+def test_monthly_summary_rejects_unrepresentable_end_date(client):
+    headers = register_and_login(client)
+    response = client.get(
+        "/api/v1/analytics/monthly", headers=headers, params={"month": "9999-12"}
+    )
+    assert response.status_code == 400
+    assert (
+        client.get(
+            "/api/v1/analytics/monthly", headers=headers, params={"month": "9999-11"}
+        ).status_code
+        == 200
+    )
