@@ -20,6 +20,7 @@ Helper tools (4, added) : current_date, find_category, get_expense,
                           expenses_between
 """
 
+import math
 import os
 import sqlite3
 from datetime import date, datetime, timedelta
@@ -186,9 +187,11 @@ def _parse_month(value: str | None) -> tuple[int, int]:
             continue
 
     words = text.replace(",", " ").split()
-    month = next((_MONTH_NAMES[w] for w in words if w in _MONTH_NAMES), today.month)
+    month = next((_MONTH_NAMES[w] for w in words if w in _MONTH_NAMES), None)
     year = next((int(w) for w in words if w.isdigit() and len(w) == 4), today.year)
-    return year, month
+    if month is not None and 1 <= year <= 9999:
+        return year, month
+    raise ValueError(f"Unsupported month: {value!r}")
 
 
 def _resolve_category(name: str) -> dict | None:
@@ -292,8 +295,8 @@ def add_expense(
     """
     clean_description = (description or "").strip()
     clean_amount = _money(amount)
-    if clean_amount <= 0:
-        return {"ok": False, "error": "Amount must be greater than zero."}
+    if not math.isfinite(clean_amount) or clean_amount <= 0:
+        return {"ok": False, "error": "Amount must be finite and greater than zero."}
     if not clean_description:
         return {"ok": False, "error": "Description cannot be empty."}
 
@@ -338,10 +341,14 @@ def update_expense(
 
     sets, params = [], []
     if amount is not None:
-        if _money(amount) <= 0:
-            return {"ok": False, "error": "Amount must be greater than zero."}
+        clean_amount = _money(amount)
+        if not math.isfinite(clean_amount) or clean_amount <= 0:
+            return {
+                "ok": False,
+                "error": "Amount must be finite and greater than zero.",
+            }
         sets.append("amount = ?")
-        params.append(_money(amount))
+        params.append(clean_amount)
     if expense_date is not None:
         sets.append("expense_date = ?")
         params.append(_parse_date(expense_date))
