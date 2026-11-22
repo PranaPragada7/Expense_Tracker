@@ -138,3 +138,20 @@ def test_date_month_helpers_and_database_creation(tmp_path, monkeypatch, databas
     monkeypatch.setattr(server, "DB_PATH", str(path))
     server._ensure_db()
     assert path.exists()
+
+
+@pytest.mark.parametrize("amount", [float("nan"), float("inf"), float("-inf")])
+def test_nonfinite_amounts_cannot_be_saved_or_overwrite_expenses(database, amount):
+    food = category_id("Food")
+    assert server.add_expense("today", "Invalid amount", amount, food)["ok"] is False
+    assert server.list_expenses() == []
+    expense = server.add_expense("today", "Valid expense", 12.50, food)
+    assert server.update_expense(expense["id"], amount=amount)["ok"] is False
+    assert server.get_expense(expense["id"])["amount"] == 12.50
+    assert server.total_expense() == {"count": 1, "total": 12.50}
+
+
+@pytest.mark.parametrize("month", ["nonsense", "2026-13", "2026-00", "13", "0000-07"])
+def test_invalid_month_does_not_silently_report_a_different_month(database, month):
+    with pytest.raises(ValueError, match="Unsupported month"):
+        server.monthly_summary(month)
